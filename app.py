@@ -1,48 +1,44 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-import av
-import numpy as np
+import speech_recognition as sr
 
-st.title("Multi-user Audio Communication")
+def recognize_speech(recognizer):
+    """Continuously listens for speech and returns the transcript."""
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)  # Improve clarity
+        audio_stream = recognizer.listen(source)
 
-st.write("Enter the room and speak with mute/unmute functionality.")
+    try:
+        transcript = recognizer.recognize_google(audio_stream)  # Adjust for chosen service
+        return transcript
+    except sr.UnknownValueError:
+        print("Could not understand audio")
+        return ""
+    except sr.RequestError as e:
+        st.error(f"Could not request results from speech recognition service: {e}")
+        return ""
 
-# Custom audio processor
-class AudioProcessor:
-    def __init__(self):
-        self.muted = False
+# Initialize variables and layout
+st.title("Real-time Speech-to-Text")
+user_name = st.text_input("Enter your name")
 
-    def recv(self, frame):
-        # If muted, replace the audio data with silence
-        if self.muted:
-            audio_frame = frame.to_ndarray()
-            audio_frame[:] = 0
-            return av.AudioFrame.from_ndarray(audio_frame, format=frame.format)
-        else:
-            return frame
+if user_name:
+    st.write("Enable continuous speech recognition (check box to start).")
+    is_listening = st.checkbox("Start Transcribing", key="is_listening")  # Add key
 
-    def toggle_mute(self):
-        self.muted = not self.muted
+    # Create a recognizer instance
+    recognizer = sr.Recognizer()
 
-# RTC Configuration
-rtc_configuration = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
+    if is_listening:
+        transcript = ""
+        st.write("Speak now!")
+        # text = ""
 
-# WebRTC Streamer
-ctx = webrtc_streamer(
-    key="example",
-    mode=WebRtcMode.SENDRECV,
-    rtc_configuration=rtc_configuration,
-    audio_processor_factory=AudioProcessor,
-    media_stream_constraints={
-        "video": False,  # Disable video for this example
-        "audio": True,
-    },
-)
+        # Continuously listen for speech in a loop
+        while True:
+            transcript = recognize_speech(recognizer)
+            # text = text+transcript
+            if transcript.strip():
+                st.write(f"**{user_name}:** {transcript}")
 
-# Mute/Unmute Button
-if ctx.audio_processor:
-    if st.button("Mute/Unmute"):
-        ctx.audio_processor.toggle_mute()
-        st.write("Muted" if ctx.audio_processor.muted else "Unmuted")
+else:
+    st.write("Please enter your name.")
